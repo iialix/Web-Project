@@ -461,6 +461,109 @@ class DB_Ops {
             return ["success" => false, "error" => $e->getMessage()];
         }
     }
+
+    // =========================
+    // ADD TO WISHLIST
+    // =========================
+    public function addToWishlist($movieId, $userId) {
+
+        if (empty($movieId) || empty($userId)) {
+            return ["success" => false, "error" => "MovieID and UserID are required."];
+        }
+
+        try {
+            // Check if already in wishlist
+            $checkSql  = "SELECT Id FROM wishlist WHERE MovieID = :movieId AND UserID = :userId";
+            $checkStmt = $this->pdo->prepare($checkSql);
+            $checkStmt->bindParam(':movieId', $movieId, PDO::PARAM_INT);
+            $checkStmt->bindParam(':userId',  $userId,  PDO::PARAM_INT);
+            $checkStmt->execute();
+
+            if ($checkStmt->fetch()) {
+                return ["success" => false, "error" => "Movie is already in your wishlist."];
+            }
+
+            $sql  = "INSERT INTO wishlist (MovieID, UserID) VALUES (:movieId, :userId)";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->bindParam(':movieId', $movieId, PDO::PARAM_INT);
+            $stmt->bindParam(':userId',  $userId,  PDO::PARAM_INT);
+            $stmt->execute();
+
+            return [
+                "success"  => true,
+                "message"  => "Added to wishlist successfully.",
+                "wishlistId" => $this->pdo->lastInsertId()
+            ];
+
+        } catch (PDOException $e) {
+            return ["success" => false, "error" => $e->getMessage()];
+        }
+    }
+
+    // =========================
+    // REMOVE FROM WISHLIST
+    // =========================
+    public function removeFromWishlist($movieId, $userId) {
+
+        if (empty($movieId) || empty($userId)) {
+            return ["success" => false, "error" => "MovieID and UserID are required."];
+        }
+
+        try {
+            $sql  = "DELETE FROM wishlist WHERE MovieID = :movieId AND UserID = :userId";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->bindParam(':movieId', $movieId, PDO::PARAM_INT);
+            $stmt->bindParam(':userId',  $userId,  PDO::PARAM_INT);
+            $stmt->execute();
+
+            if ($stmt->rowCount() > 0) {
+                return ["success" => true, "message" => "Removed from wishlist successfully."];
+            } else {
+                return ["success" => false, "error" => "Movie not found in your wishlist."];
+            }
+
+        } catch (PDOException $e) {
+            return ["success" => false, "error" => $e->getMessage()];
+        }
+    }
+
+    // =========================
+    // GET WISHLIST BY USER
+    // =========================
+    public function getWishlistByUser($userId) {
+
+        if (empty($userId)) {
+            return ["success" => false, "error" => "User ID is required."];
+        }
+
+        try {
+            $sql  = "SELECT w.Id, w.MovieID, w.UserID, m.name, m.categories, m.description, TO_BASE64(m.poster) AS poster
+                    FROM wishlist w
+                    JOIN movies m ON w.MovieID = m.id
+                    WHERE w.UserID = :userId
+                    ORDER BY w.Id DESC";
+
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->bindParam(':userId', $userId, PDO::PARAM_INT);
+            $stmt->execute();
+
+            $wishlist = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (empty($wishlist)) {
+                return ["success" => true, "data" => [], "message" => "Wishlist is empty."];
+            }
+
+            return [
+                "success"    => true,
+                "userId"     => $userId,
+                "totalItems" => count($wishlist),
+                "data"       => $wishlist
+            ];
+
+        } catch (PDOException $e) {
+            return ["success" => false, "error" => $e->getMessage()];
+        }
+    }
 }
 
 // ─────────────────────────────────────────
@@ -581,6 +684,32 @@ if ($method === 'GET' && $action === 'getAllMovies') {
     $success = str_contains($result, 'successfully');
     http_response_code($success ? 200 : 400);
     echo json_encode(["success" => $success, "message" => $result]);
+
+// POST /DB_Ops.php?action=addToWishlist
+} elseif ($method === 'POST' && $action === 'addToWishlist') {
+    $body   = json_decode(file_get_contents("php://input"), true);
+    $result = $db->addToWishlist(
+        $body['movieId'] ?? '',
+        $body['userId']  ?? ''
+    );
+    http_response_code($result['success'] ? 201 : 400);
+    echo json_encode($result);
+
+// POST /DB_Ops.php?action=removeFromWishlist
+} elseif ($method === 'POST' && $action === 'removeFromWishlist') {
+    $body   = json_decode(file_get_contents("php://input"), true);
+    $result = $db->removeFromWishlist(
+        $body['movieId'] ?? '',
+        $body['userId']  ?? ''
+    );
+    http_response_code($result['success'] ? 200 : 400);
+    echo json_encode($result);
+
+// GET /DB_Ops.php?action=getWishlistByUser&userId=1
+} elseif ($method === 'GET' && $action === 'getWishlistByUser') {
+    $result = $db->getWishlistByUser($_GET['userId'] ?? '');
+    http_response_code($result['success'] ? 200 : 400);
+    echo json_encode($result);
 
 } else {
     http_response_code(404);
