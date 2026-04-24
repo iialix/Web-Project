@@ -33,7 +33,7 @@ public function getAllMovies() {
     try {
         // 1. Try DB first
         $sql = "SELECT id, name, categories, description,
-                TO_BASE64(poster) AS poster
+                REPLACE(REPLACE(TO_BASE64(poster), '\n', ''), '\r', '') AS poster
                 FROM movies";
 
         $stmt = $this->pdo->prepare($sql);
@@ -585,7 +585,8 @@ public function getAllMovies() {
         }
 
         try {
-            $sql  = "SELECT w.Id, w.MovieID, w.UserID, m.name, m.categories, m.description, TO_BASE64(m.poster) AS poster
+            $sql  = "SELECT w.Id, w.MovieID, w.UserID, m.name, m.categories, m.description,
+                            REPLACE(REPLACE(TO_BASE64(m.poster), '\n', ''), '\r', '') AS poster
                     FROM wishlist w
                     JOIN movies m ON w.MovieID = m.id
                     WHERE w.UserID = :userId

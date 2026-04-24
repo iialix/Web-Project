@@ -163,7 +163,7 @@ async function loadMovies(containerId = 'movies-container') {
             container.innerHTML = result.data.map((movie, index) => `
                 <div class="movie-card" style="animation-delay: ${index * 0.1}s" onclick="showMovieDetail(${movie.id})">
                     <div class="poster-wrapper">
-                        <img src="data:image/jpeg;base64,${movie.poster}" alt="${escapeHtml(movie.name)}" loading="lazy">
+                        <img src="${getPosterSrc(movie.poster)}" alt="${escapeHtml(movie.name)}" loading="lazy">
                         <div class="overlay">
                             <h3>${escapeHtml(movie.name)}</h3>
                             <p class="categories">${escapeHtml(movie.categories)}</p>
@@ -211,7 +211,7 @@ async function showMovieDetail(movieId) {
                 container.innerHTML = `
                     <div class="movie-detail">
                         <div class="movie-detail-poster">
-                            <img src="data:image/jpeg;base64,${movie.poster}" alt="${escapeHtml(movie.name)}">
+                            <img src="${getPosterSrc(movie.poster)}" alt="${escapeHtml(movie.name)}">
                         </div>
                         <div class="movie-detail-info">
                             <h2>${escapeHtml(movie.name)}</h2>
@@ -590,6 +590,38 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+/**
+ * Build a safe poster source from DB/API poster payload
+ * @param {string} poster - poster payload (base64 or URL)
+ * @returns {string}
+ */
+function getPosterSrc(poster) {
+    if (!poster) {
+        return 'https://via.placeholder.com/500x750?text=No+Poster';
+    }
+
+    // If backend sends a URL, use it directly.
+    if (typeof poster === 'string' && /^https?:\/\//i.test(poster)) {
+        return poster;
+    }
+
+    // Remove base64 line breaks/whitespace that break data URLs.
+    const cleanPoster = String(poster).replace(/\s+/g, '');
+    if (!cleanPoster) {
+        return 'https://via.placeholder.com/500x750?text=No+Poster';
+    }
+
+    // Infer MIME from base64 signature to support jpeg/png/webp.
+    let mimeType = 'image/jpeg';
+    if (cleanPoster.startsWith('iVBOR')) {
+        mimeType = 'image/png';
+    } else if (cleanPoster.startsWith('UklGR')) {
+        mimeType = 'image/webp';
+    }
+
+    return `data:${mimeType};base64,${cleanPoster}`;
 }
 
 // ========================================
