@@ -6,10 +6,7 @@
         </div>
     </footer>
     <script src="validation.js"></script>
-    <!-- FIX: Removed <script src="API_Ops.js"> — that file does not exist in
-         the project. The browser was throwing a 404 for it on every page load.
-         All API calls go directly through main.js → DB_Ops.php, so the
-         missing script had no effect on functionality. -->
+    <script src="API_Ops.js"></script>
     <script src="main.js"></script>
 </body>
 </html>

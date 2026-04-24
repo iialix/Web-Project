@@ -306,11 +306,7 @@ document.getElementById('login-form')?.addEventListener('submit', async (e) => {
     };
     
     const errors = Validation.validateLogin(data);
-    // FIX: Pass 'login-' prefix so showErrors targets login-email-error and
-    // login-password-error, which are the actual IDs used in index.php.
-    // Without the prefix, showErrors searched for 'email-error' and
-    // 'password-error' which do not exist, so errors were silently swallowed.
-    if (!Validation.showErrors(errors, 'login-')) return;
+    if (!Validation.showErrors(errors)) return;
     
     try {
         const result = await post('DB_Ops.php?action=login', data);
@@ -341,10 +337,7 @@ document.getElementById('signup-form')?.addEventListener('submit', async (e) => 
     };
     
     const errors = Validation.validateSignup(data);
-    // FIX: Pass 'signup-' prefix so showErrors targets signup-username-error,
-    // signup-email-error, signup-password-error, and signup-birthdate-error,
-    // matching the IDs in index.php. Without the prefix errors never appeared.
-    if (!Validation.showErrors(errors, 'signup-')) return;
+    if (!Validation.showErrors(errors)) return;
     
     try {
         const result = await post('DB_Ops.php?action=signup', data);
@@ -383,17 +376,16 @@ function showLoginForm() {
 
 /**
  * Update UI based on authentication state
- *
- * FIX: Previously this function also set authLink.dataset.view = '' when the
- * user was logged in. That wiped the data-view attribute, so the nav click
- * handler (which checks viewName === 'auth') could never detect a logout
- * click — clicking "Logout" just called showView('') and went blank.
- * The data-view="auth" set in header.php is correct and must stay as-is;
- * we only need to swap the visible link text here.
  */
 function updateAuthUI() {
     const authLink = document.getElementById('authLink');
-    authLink.textContent = currentUser ? 'Logout' : 'Login';
+    if (currentUser) {
+        authLink.textContent = 'Logout';
+        authLink.dataset.view = '';
+    } else {
+        authLink.textContent = 'Login';
+        authLink.dataset.view = 'auth';
+    }
 }
 
 /**
@@ -527,16 +519,11 @@ function searchMovies() {
         }
     });
     
-    // FIX: Check whether the "no results" message already exists before
-    // appending. Previously every failed search appended a new paragraph,
-    // producing multiple elements with the same id="no-results" in the DOM.
-    const existingMsg = document.getElementById('no-results');
     if (!hasResults) {
-        if (!existingMsg) {
-            container.innerHTML += '<p class="empty-state" id="no-results">No movies match your search.</p>';
-        }
+        container.innerHTML += '<p class="empty-state" id="no-results">No movies match your search.</p>';
     } else {
-        if (existingMsg) existingMsg.remove();
+        const noResults = document.getElementById('no-results');
+        if (noResults) noResults.remove();
     }
 }
 
