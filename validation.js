@@ -8,12 +8,22 @@ const Validation = {
      * Validate signup form data
      * @param {Object} data - { userName, email, password, birthDate }
      * @returns {Object} errors - field errors
+     *
+     * FIX (error key names): Error keys were renamed from camelCase (userName,
+     * birthDate) to lowercase (username, birthdate) so they match the element
+     * IDs in index.php (signup-username-error, signup-birthdate-error) when
+     * combined with the 'signup-' prefix passed to showErrors.
+     *
+     * FIX (age calculation): Age was previously calculated using year difference
+     * only (today.getFullYear() - birthDate.getFullYear()), which over-counted
+     * by 1 for anyone whose birthday has not yet occurred this calendar year.
+     * Now we subtract 1 if the current month/day is still before the birthday.
      */
     validateSignup(data) {
         const errors = {};
         
         if (!data.userName || data.userName.trim().length < 3) {
-            errors.userName = 'Username must be at least 3 characters';
+            errors.username = 'Username must be at least 3 characters';
         }
         
         if (!data.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
@@ -25,13 +35,17 @@ const Validation = {
         }
         
         if (!data.birthDate) {
-            errors.birthDate = 'Birth date is required';
+            errors.birthdate = 'Birth date is required';
         } else {
             const birthDate = new Date(data.birthDate);
             const today = new Date();
-            const age = today.getFullYear() - birthDate.getFullYear();
-            if (age < 13 || birthDate > today) {
-                errors.birthDate = 'You must be at least 13 years old';
+            const yearDiff = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            const dayDiff = today.getDate() - birthDate.getDate();
+            // Subtract 1 if the birthday has not happened yet this year
+            const age = (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) ? yearDiff - 1 : yearDiff;
+            if (birthDate > today || age < 13) {
+                errors.birthdate = 'You must be at least 13 years old';
             }
         }
         
@@ -120,9 +134,19 @@ const Validation = {
     /**
      * Display validation errors in the form
      * @param {Object} errors - Object with field names as keys and error messages as values
+     * @param {string} [prefix=''] - Optional prefix prepended to each field name when
+     *   building the element ID, e.g. 'login-' targets 'login-email-error'.
+     *   Pass 'login-' for the login form and 'signup-' for the signup form.
+     *   Leave empty (default) for the movie and rating forms.
      * @returns {boolean} - true if no errors, false if errors exist
+     *
+     * FIX: Added the optional prefix parameter. Previously the function always
+     * looked up bare field names like 'email-error', which only matched the
+     * movie/rating form spans. The login and signup forms prefix their error
+     * span IDs with the form name (e.g. 'login-email-error'), so without the
+     * prefix those spans were never found and errors were never shown.
      */
-    showErrors(errors) {
+    showErrors(errors, prefix = '') {
         // Clear all previous errors
         document.querySelectorAll('.error-msg').forEach(el => {
             el.textContent = '';
@@ -131,7 +155,7 @@ const Validation = {
         
         // Show new errors with shake animation
         Object.keys(errors).forEach(field => {
-            const errorEl = document.getElementById(`${field}-error`);
+            const errorEl = document.getElementById(`${prefix}${field}-error`);
             if (errorEl) {
                 errorEl.textContent = errors[field];
                 errorEl.classList.add('active');
