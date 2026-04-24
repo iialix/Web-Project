@@ -4,7 +4,7 @@ $host = "localhost";
 $dbname = "assignment";
 $username = "root";
 $password = "";
-$port = 3307;
+$port = 3306;
 
 try {
     $pdo = new PDO(
@@ -29,27 +29,75 @@ class DB_Ops {
     // =========================
     // GET ALL MOVIES
     // =========================
-    public function getAllMovies() {
-        try {
-            $sql  = "SELECT id, name, categories, description,
-                     TO_BASE64(poster) AS poster
-                     FROM movies";
+public function getAllMovies() {
+    try {
+        // 1. Try DB first
+        $sql = "SELECT id, name, categories, description,
+                TO_BASE64(poster) AS poster
+                FROM movies";
 
-            $stmt = $this->pdo->prepare($sql);
-            $stmt->execute();
-            $movies = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute();
+        $movies = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            if (empty($movies)) {
-                return ["success" => true, "data" => [], "message" => "No movies found."];
-            }
-
+        // 2. If DB has data → return it
+        if (!empty($movies)) {
             return ["success" => true, "data" => $movies];
-
-        } catch (PDOException $e) {
-            return ["success" => false, "error" => $e->getMessage()];
         }
-    }
 
+        // 3. If DB empty → fetch from OMDb
+        $apiKey = "c6446c3";
+        $search = "avengers"; // default search (you can change)
+
+        $url = "http://www.omdbapi.com/?s=" . urlencode($search) . "&apikey=" . $apiKey;
+
+        $response = file_get_contents($url);
+        $data = json_decode($response, true);
+
+        if (!isset($data['Search'])) {
+            return ["success" => true, "data" => [], "message" => "No movies found from OMDb"];
+        }
+
+        $moviesFromApi = [];
+
+        foreach ($data['Search'] as $movie) {
+
+            // fetch full details
+            $detailUrl = "http://www.omdbapi.com/?i=" . $movie['imdbID'] . "&apikey=" . $apiKey;
+            $detailResponse = file_get_contents($detailUrl);
+            $detail = json_decode($detailResponse, true);
+
+            // insert into DB
+            $insertSql = "INSERT INTO movies (name, categories, description, poster)
+                          VALUES (:name, :categories, :description, :poster)";
+
+            $stmtInsert = $this->pdo->prepare($insertSql);
+
+            $posterData = @file_get_contents($detail['Poster']);
+            if (!$posterData) $posterData = null;
+
+            $stmtInsert->execute([
+                ':name' => $detail['Title'],
+                ':categories' => $detail['Genre'],
+                ':description' => $detail['Plot'],
+                ':poster' => $posterData
+            ]);
+
+            $moviesFromApi[] = [
+                "id" => $this->pdo->lastInsertId(),
+                "name" => $detail['Title'],
+                "categories" => $detail['Genre'],
+                "description" => $detail['Plot'],
+                "poster" => base64_encode($posterData)
+            ];
+        }
+
+        return ["success" => true, "data" => $moviesFromApi];
+
+    } catch (PDOException $e) {
+        return ["success" => false, "error" => $e->getMessage()];
+    }
+}
     // =========================
     // SIGNUP
     // =========================

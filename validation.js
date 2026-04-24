@@ -13,25 +13,43 @@ const Validation = {
         const errors = {};
         
         if (!data.userName || data.userName.trim().length < 3) {
-            errors.userName = 'Username must be at least 3 characters';
+            errors['signup-username'] = 'Username must be at least 3 characters';
         }
         
         if (!data.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
-            errors.email = 'Please enter a valid email address';
+            errors['signup-email'] = 'Please enter a valid email address';
         }
         
         if (!data.password || data.password.length < 6) {
-            errors.password = 'Password must be at least 6 characters';
+            errors['signup-password'] = 'Password must be at least 6 characters';
         }
         
         if (!data.birthDate) {
-            errors.birthDate = 'Birth date is required';
+            errors['signup-birthdate'] = 'Birth date is required';
         } else {
-            const birthDate = new Date(data.birthDate);
+            // Parse as local date (YYYY-MM-DD) to avoid timezone off-by-one issues
+            const [year, month, day] = data.birthDate.split('-').map(Number);
+            const birthDate = new Date(year, month - 1, day);
             const today = new Date();
-            const age = today.getFullYear() - birthDate.getFullYear();
-            if (age < 13 || birthDate > today) {
-                errors.birthDate = 'You must be at least 13 years old';
+            const isInvalidDate =
+                !year || !month || !day ||
+                isNaN(birthDate.getTime()) ||
+                birthDate.getFullYear() !== year ||
+                birthDate.getMonth() !== month - 1 ||
+                birthDate.getDate() !== day;
+
+            if (isInvalidDate || birthDate > today) {
+                errors['signup-birthdate'] = 'Please enter a valid birth date';
+            } else {
+                // Compute age accounting for whether this year's birthday has passed
+                let age = today.getFullYear() - birthDate.getFullYear();
+                const monthDiff = today.getMonth() - birthDate.getMonth();
+                if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                    age--;
+                }
+                if (age < 13) {
+                    errors['signup-birthdate'] = 'You must be at least 13 years old';
+                }
             }
         }
         
@@ -47,11 +65,11 @@ const Validation = {
         const errors = {};
         
         if (!data.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
-            errors.email = 'Please enter a valid email address';
+            errors['login-email'] = 'Please enter a valid email address';
         }
         
         if (!data.password) {
-            errors.password = 'Password is required';
+            errors['login-password'] = 'Password is required';
         }
         
         return errors;

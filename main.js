@@ -18,25 +18,31 @@ let currentMovieId = null;
  * @param {string} viewName - The view ID to show (e.g., 'home', 'movies', 'auth')
  */
 function showView(viewName) {
+    // Guard: profile requires authentication
+    if (viewName === 'profile' && !currentUser) {
+        showToast('Please login to view your profile', 'error');
+        viewName = 'auth';
+    }
+
     // Hide all views
     document.querySelectorAll('.view').forEach(view => {
         view.classList.remove('active');
     });
-    
+
     // Show target view
     const targetView = document.getElementById(`view-${viewName}`);
     if (targetView) {
         targetView.classList.add('active');
     }
-    
+
     // Update nav active state
     document.querySelectorAll('.main-nav a').forEach(link => {
         link.classList.toggle('active', link.dataset.view === viewName);
     });
-    
+
     // Close mobile menu
     document.querySelector('.main-nav').classList.remove('active');
-    
+
     // Load data based on view
     if (viewName === 'movies' || viewName === 'home') {
         loadMovies(viewName === 'home' ? 'featured-movies' : 'movies-container');
@@ -46,7 +52,7 @@ function showView(viewName) {
     } else if (viewName === 'auth') {
         Validation.clearErrors();
     }
-    
+
     // Scroll to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -56,13 +62,13 @@ document.querySelectorAll('.main-nav a').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
         const viewName = link.dataset.view;
-        
+
         // Handle logout
         if (viewName === 'auth' && currentUser) {
             logout();
             return;
         }
-        
+
         showView(viewName);
     });
 });
@@ -147,12 +153,12 @@ async function postFormData(url, formData) {
 async function loadMovies(containerId = 'movies-container') {
     const container = document.getElementById(containerId);
     if (!container) return;
-    
+
     container.innerHTML = '<div class="spinner"></div>';
-    
+
     try {
         const result = await get('DB_Ops.php?action=getAllMovies');
-        
+
         if (result.success && result.data && result.data.length > 0) {
             container.innerHTML = result.data.map((movie, index) => `
                 <div class="movie-card" style="animation-delay: ${index * 0.1}s" onclick="showMovieDetail(${movie.id})">
@@ -182,18 +188,25 @@ async function loadMovies(containerId = 'movies-container') {
  */
 async function showMovieDetail(movieId) {
     currentMovieId = movieId;
-    
+
     const container = document.getElementById('movie-detail-content');
     container.innerHTML = '<div class="spinner"></div>';
+
+    // Clear stale content from any previously viewed movie
+    const ratingsContainer = document.getElementById('movie-ratings');
+    if (ratingsContainer) ratingsContainer.innerHTML = '';
+    const ratingFormEl = document.getElementById('add-rating-form');
+    if (ratingFormEl) ratingFormEl.style.display = 'none';
+
     showView('movie-detail');
-    
+
     try {
         // Get all movies and find the one we need
         const result = await get('DB_Ops.php?action=getAllMovies');
-        
+
         if (result.success && result.data) {
             const movie = result.data.find(m => m.id == movieId);
-            
+
             if (movie) {
                 container.innerHTML = `
                     <div class="movie-detail">
@@ -211,10 +224,10 @@ async function showMovieDetail(movieId) {
                         </div>
                     </div>
                 `;
-                
+
                 // Load ratings for this movie
                 loadMovieRatings(movieId);
-                
+
                 // Show rating form if user is logged in
                 const ratingForm = document.getElementById('add-rating-form');
                 if (ratingForm) {
@@ -223,6 +236,8 @@ async function showMovieDetail(movieId) {
             } else {
                 container.innerHTML = '<p class="empty-state">Movie not found.</p>';
             }
+        } else {
+            container.innerHTML = '<p class="empty-state">Failed to load movie details.</p>';
         }
     } catch (error) {
         container.innerHTML = '<p class="empty-state">Failed to load movie details.</p>';
@@ -236,12 +251,12 @@ async function showMovieDetail(movieId) {
 async function loadMovieRatings(movieId) {
     const container = document.getElementById('movie-ratings');
     if (!container) return;
-    
+
     container.innerHTML = '<div class="spinner"></div>';
-    
+
     try {
         const result = await get(`DB_Ops.php?action=getRatingsByMovie&movieId=${movieId}`);
-        
+
         if (result.success && result.data && result.data.length > 0) {
             const averageRating = result.averageRating || 0;
             container.innerHTML = `
@@ -381,7 +396,9 @@ function updateAuthUI() {
     const authLink = document.getElementById('authLink');
     if (currentUser) {
         authLink.textContent = 'Logout';
-        authLink.dataset.view = '';
+        // Keep data-view as 'auth' so the nav click handler can
+        // detect the logout case via `viewName === 'auth' && currentUser`
+        authLink.dataset.view = 'auth';
     } else {
         authLink.textContent = 'Login';
         authLink.dataset.view = 'auth';
@@ -487,6 +504,7 @@ async function loadUserRatings(userId) {
             container.innerHTML = '<p class="empty-state">No ratings yet. Start rating movies!</p>';
         }
     } catch (error) {
+        document.getElementById('total-ratings').textContent = '0';
         container.innerHTML = '<p class="empty-state">Failed to load your ratings.</p>';
     }
 }
@@ -519,11 +537,17 @@ function searchMovies() {
         }
     });
     
+    const existingNoResults = document.getElementById('no-results');
     if (!hasResults) {
-        container.innerHTML += '<p class="empty-state" id="no-results">No movies match your search.</p>';
-    } else {
-        const noResults = document.getElementById('no-results');
-        if (noResults) noResults.remove();
+        if (!existingNoResults) {
+            const noResults = document.createElement('p');
+            noResults.className = 'empty-state';
+            noResults.id = 'no-results';
+            noResults.textContent = 'No movies match your search.';
+            container.appendChild(noResults);
+        }
+    } else if (existingNoResults) {
+        existingNoResults.remove();
     }
 }
 
